@@ -1,7 +1,7 @@
 {#- Wi-Fi of all PCs, one row each. Finds every device of manufacturer "wifi-reporter", so new PCs
     appear on their own. Entities are found by their entity_id suffix (_signal, _download, …): renaming
     an entity is fine as long as the suffix stays. Link rate, Download and Upload are in Mbit/s.
-    An offline PC shows only its name, in grey; a PC without a Wi-Fi connection (Ethernet) shows "no Wi-Fi".
+    An offline PC shows only its name, in grey; a PC without a Wi-Fi connection (Ethernet) shows "LAN".
     Values not reported yet (e.g. right after an HA restart with an older reporter) show as "–". -#}
 {#- Access point names by the first 5 bytes of the BSSID (the radios of one AP differ only in the last byte).
     Examples; build_dashboard.py puts in the real ones from ha/local.json. -#}
@@ -30,7 +30,7 @@
     {%- set up = states(find(e, 'upload')) | float(none) -%}
     {%- set row = [
       '**' ~ pc.name ~ '**',
-      'no Wi-Fi' if bssid == 'unknown' else ap_names.get(bssid[:14], text(ap)),
+      'LAN' if bssid == 'unknown' else ap_names.get(bssid[:14], text(ap)),
       '' if bssid == 'unknown' else text(find(e, 'band')) ~ ' · ' ~ text(find(e, 'standard')).split(' (')[0],
       rssi ~ ' dBm' if rssi is not none else '–',
       link | round(0) | int if link is not none else '–',

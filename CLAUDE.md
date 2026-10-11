@@ -93,7 +93,7 @@ Topics: `wifi_reporter/<device>/{state,iperf,system,stats,availability}`, discov
 slugified device name. All topics are retained (since 0.3.1; before that an HA restart left the Wi-Fi
 sensors unavailable until the next report). `system` (inventory) sensors have no availability/expire_after, so
 HA shows the last known hardware while the PC is off; `stats` sensors behave like the Wi-Fi ones. Without a
-Wi-Fi connection the state is published with all fields null, so HA shows "unknown" (dashboard: "no Wi-Fi"). Inventory
+Wi-Fi connection the state is published with all fields null, so HA shows "unknown" (dashboard: "LAN"). Inventory
 sensors carry details as attributes via `json_attributes_template` on a `<key>_info` object. Stats are
 published every interval even without Wi-Fi (Ethernet PCs). No LibreHardwareMonitor: temperatures/fans/GPU
 load would need it plus the PawnIO driver (WinRing0 is flagged by Defender); deliberately left out for now,
