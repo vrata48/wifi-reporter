@@ -1,0 +1,98 @@
+{#- Hardware card for the __INDEX__-th wifi-reporter PC (sorted by name). Renders nothing when there are
+    fewer PCs, so the card hides itself (show_empty: false). The inventory sensors keep their values while
+    a PC is off; the volume usage is unavailable then. -#}
+{%- set index = __INDEX__ -%}
+{%- set vendors = {
+  'Micro-Star International Co., Ltd.': 'MSI', 'ASUSTeK COMPUTER INC.': 'ASUS',
+  'Gigabyte Technology Co., Ltd.': 'Gigabyte', 'LENOVO': 'Lenovo', 'Dell Inc.': 'Dell',
+  '(R)': '', '(TM)': '', ' CPU': '', ' Network Adapter': '',
+} -%}
+{%- macro find(ents, suffix) -%}{{ ents | select('search', '_' ~ suffix ~ '$') | first | default('', true) }}{%- endmacro -%}
+{%- macro short(text) -%}
+{%- set ns2 = namespace(t=text) -%}
+{%- for k, v in vendors.items() -%}{%- set ns2.t = ns2.t.replace(k, v) -%}{%- endfor -%}
+{#- "Dell Inc. Dell Pro Max" → "Dell Pro Max": the vendor is often repeated in the product name -#}
+{%- set w = ns2.t.split() -%}
+{{ (w[1:] if w | count > 1 and w[0] | lower == w[1] | lower else w) | join(' ') }}
+{%- endmacro -%}
+{%- macro known(entity) -%}{{ entity != '' and states(entity) not in ['unavailable', 'unknown', 'None', ''] }}{%- endmacro -%}
+{%- set ns = namespace(pcs=[]) -%}
+{%- for d in integration_entities('mqtt') | map('device_id') | reject('none') | unique
+     | select('is_device_attr', 'manufacturer', 'wifi-reporter') -%}
+  {%- set ns.pcs = ns.pcs + [{'id': d, 'name': device_attr(d, 'name_by_user') or device_attr(d, 'name')}] -%}
+{%- endfor -%}
+{%- set pcs = ns.pcs | sort(attribute='name') -%}
+{%- if index < pcs | count -%}
+{%- set pc = pcs[index] -%}
+{%- set e = device_entities(pc.id) -%}
+{%- set sig = find(e, 'signal') -%}
+{%- set onl = find(e, 'online') -%}
+{%- set online = is_state(onl, 'on') if onl else states(sig) not in ['unavailable', 'unknown'] -%}
+{%- set cpu = find(e, 'cpu') -%}
+{%- if online -%}
+  {%- set boot = find(e, 'boot_time') -%}
+  {%- set status = 'online' ~ (' · up ' ~ relative_time(as_datetime(states(boot))) if known(boot) == 'True' else '') -%}
+{%- else -%}
+  {%- set since = states[onl or sig].last_changed if (onl or sig) else none -%}
+  {%- set status = 'offline' ~ (' ' ~ relative_time(since) if since else '') -%}
+{%- endif -%}
+## {{ pc.name }}
+
+<table>
+<tr><td><b>Status</b></td><td>{{ status }}</td></tr>
+{%- if cpu == '' %}
+<tr><td><b>Hardware</b></td><td>needs wifi-reporter 0.3.0 (this PC runs {{ device_attr(pc.id, 'sw_version') }})</td></tr>
+{%- else -%}
+{%- set cores = state_attr(cpu, 'cores') -%}
+{%- set p = state_attr(cpu, 'performance_cores') -%}
+{%- set cpu_text = short(states(cpu))
+    ~ (' · ' ~ cores ~ ' cores / ' ~ state_attr(cpu, 'threads') ~ ' threads' if cores else '')
+    ~ (' (' ~ p ~ 'P + ' ~ state_attr(cpu, 'efficiency_cores') ~ 'E)' if p else '') -%}
+{%- set board = find(e, 'motherboard') -%}
+{%- set bios = state_attr(board, 'bios_version') -%}
+{%- set board_text = short(states(board)) if known(board) == 'True' else '–' -%}
+{%- set board_text = board_text ~ (' · BIOS ' ~ bios ~ ' (' ~ state_attr(board, 'bios_date') ~ ')' if bios else '') -%}
+{%- set model = find(e, 'model') -%}
+{%- set ram = find(e, 'ram') -%}
+{%- set modules = state_attr(ram, 'modules') or [] -%}
+{%- set sizes = modules | map(attribute='size_gb') | map('int') | unique | list -%}
+{%- set ram_text = states(ram)
+    ~ (' · ' ~ modules | count ~ '× ' ~ sizes[0] ~ ' GB' if modules and sizes | count == 1 else '')
+    ~ (' · ' ~ state_attr(ram, 'speed_mts') ~ ' MT/s' if state_attr(ram, 'speed_mts') else '') -%}
+{%- set gpus = state_attr(find(e, 'gpu'), 'gpus') or [] -%}
+{%- set ns3 = namespace(g=[], w=[], d=[], v=[]) -%}
+{%- for g in gpus -%}
+  {%- set ns3.g = ns3.g + [short(g.name) ~ (' · ' ~ g.vram_gb ~ ' GB' if g.vram_gb else '')] -%}
+{%- endfor -%}
+{%- set wifi = state_attr(find(e, 'wi_fi_adapter'), 'adapters') or [] -%}
+{%- for w in wifi -%}
+  {%- set ns3.w = ns3.w + [short(w.name) ~ (' · driver ' ~ w.driver if w.driver else '')] -%}
+{%- endfor -%}
+{%- for d in state_attr(find(e, 'disks'), 'disks') or [] -%}
+  {%- set ns3.d = ns3.d + [d.model ~ ' (' ~ ([d.size, d.type] | reject('none') | join(' ')) ~ ')'] -%}
+{%- endfor -%}
+{%- for v in e | select('search', '_disk_[a-z]$') | sort -%}
+  {%- set pct = states(v) | float(none) -%}
+  {%- if pct is not none -%}
+    {%- set ns3.v = ns3.v + [v[-1] | upper ~ ': ' ~ pct | round(0) | int ~ ' % used ('
+        ~ state_attr(v, 'free_gb') | round(0) | int ~ ' GB free)'] -%}
+  {%- endif -%}
+{%- endfor %}
+<tr><td><b>CPU</b></td><td>{{ cpu_text }}</td></tr>
+<tr><td><b>Board</b></td><td>{{ board_text }}</td></tr>
+{%- if known(model) == 'True' and states(model) != states(board) %}
+<tr><td><b>Model</b></td><td>{{ short(states(model)) }}</td></tr>
+{%- endif %}
+<tr><td><b>RAM</b></td><td>{{ ram_text if known(ram) == 'True' else '–' }}</td></tr>
+<tr><td><b>GPU</b></td><td>{{ ns3.g | join('<br>') or '–' }}</td></tr>
+{%- if ns3.w %}
+<tr><td><b>Wi-Fi</b></td><td>{{ ns3.w | join('<br>') }}</td></tr>
+{%- endif %}
+<tr><td><b>Disks</b></td><td>{{ ns3.d | join('<br>') or '–' }}</td></tr>
+{%- if ns3.v %}
+<tr><td><b>Volumes</b></td><td>{{ ns3.v | join('<br>') }}</td></tr>
+{%- endif %}
+<tr><td><b>Windows</b></td><td>{{ states(find(e, 'windows')) | replace('Windows ', '') }}</td></tr>
+{%- endif %}
+</table>
+{%- endif -%}

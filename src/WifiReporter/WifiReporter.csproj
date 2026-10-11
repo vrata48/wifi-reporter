@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WinExe: no console window when started by the Service Control Manager or Task Scheduler.
+         In console mode the app attaches to the parent console (or opens one). -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>WifiReporter</AssemblyName>
+    <RootNamespace>WifiReporter</RootNamespace>
+    <Version>0.3.2</Version>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Deliberately no NuGet dependencies: MQTT client and service host are implemented in-tree. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\config.example.json" Link="config.example.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

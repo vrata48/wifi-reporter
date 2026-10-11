@@ -1,0 +1,12 @@
+bin/
+obj/
+publish/
+*.zip
+.vs/
+.vscode/
+*.user
+config.json
+__pycache__/
+CLAUDE.local.md
+ha/local.json
+ha/dashboard.local.yaml

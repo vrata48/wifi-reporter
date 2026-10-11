@@ -1,0 +1,14 @@
+{
+  "mqttHost": "homeassistant.local",
+  "mqttPort": 1883,
+  "mqttUsername": "",
+  "mqttPassword": "",
+  "deviceName": "",
+  "discoveryPrefix": "homeassistant",
+  "intervalSeconds": 60,
+  "iperfEnabled": true,
+  "iperfPath": "iperf3.exe",
+  "iperfServer": "homeassistant.local",
+  "iperfIntervalSeconds": 1800,
+  "iperfDurationSeconds": 5
+}

@@ -1,0 +1,47 @@
+{#- Wi-Fi of all PCs, one row each. Finds every device of manufacturer "wifi-reporter", so new PCs
+    appear on their own. Entities are found by their entity_id suffix (_signal, _download, …): renaming
+    an entity is fine as long as the suffix stays. Link rate, Download and Upload are in Mbit/s.
+    An offline PC shows only its name, in grey; a PC without a Wi-Fi connection (Ethernet) shows "no Wi-Fi".
+    Values not reported yet (e.g. right after an HA restart with an older reporter) show as "–". -#}
+{#- Access point names by the first 5 bytes of the BSSID (the radios of one AP differ only in the last byte).
+    Examples; build_dashboard.py puts in the real ones from ha/local.json. -#}
+{%- set ap_names = {
+  'aa:bb:cc:dd:00': 'Router',
+  'aa:bb:cc:dd:01': 'Node 1',
+} -%}
+{%- macro find(ents, suffix) -%}{{ ents | select('search', '_' ~ suffix ~ '$') | first | default('', true) }}{%- endmacro -%}
+{%- macro text(entity) -%}{{ states(entity) if states(entity) not in ['unavailable', 'unknown'] else '–' }}{%- endmacro -%}
+{%- set ns = namespace(pcs=[], rows=[]) -%}
+{%- for d in integration_entities('mqtt') | map('device_id') | reject('none') | unique
+     | select('is_device_attr', 'manufacturer', 'wifi-reporter') -%}
+  {%- set ns.pcs = ns.pcs + [{'id': d, 'name': device_attr(d, 'name_by_user') or device_attr(d, 'name')}] -%}
+{%- endfor -%}
+{%- for pc in ns.pcs | sort(attribute='name') -%}
+  {%- set e = device_entities(pc.id) -%}
+  {%- set sig = find(e, 'signal') -%}
+  {%- set onl = find(e, 'online') -%}
+  {%- set online = is_state(onl, 'on') if onl else states(sig) not in ['unavailable', 'unknown'] -%}
+  {%- if online -%}
+    {%- set rssi = states(sig) | int(none) -%}
+    {%- set ap = find(e, 'access_point') -%}
+    {%- set bssid = states(ap) -%}
+    {%- set link = states(find(e, 'rx_rate')) | float(none) -%}
+    {%- set down = states(find(e, 'download')) | float(none) -%}
+    {%- set up = states(find(e, 'upload')) | float(none) -%}
+    {%- set row = [
+      '**' ~ pc.name ~ '**',
+      'no Wi-Fi' if bssid == 'unknown' else ap_names.get(bssid[:14], text(ap)),
+      '' if bssid == 'unknown' else text(find(e, 'band')) ~ ' · ' ~ text(find(e, 'standard')).split(' (')[0],
+      rssi ~ ' dBm' if rssi is not none else '–',
+      link | round(0) | int if link is not none else '–',
+      down | round(0) | int if down is not none else '–',
+      up | round(0) | int if up is not none else '–',
+    ] -%}
+  {%- else -%}
+    {%- set row = ['<font color="#9e9e9e">' ~ pc.name ~ '</font>', '', '', '', '', '', ''] -%}
+  {%- endif -%}
+  {%- set ns.rows = ns.rows + ['| ' ~ row | join(' | ') ~ ' |'] -%}
+{%- endfor -%}
+| PC | Access point | Band | Signal | Link rate | Download | Upload |
+|:--|:--|:--|--:|--:|--:|--:|
+{{ ns.rows | join('\n') }}

@@ -1,0 +1,66 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish self-contained single exe (win-x64)
+        run: >
+          dotnet publish src/WifiReporter/WifiReporter.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=none
+          -o publish
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          # No command prints usage and exits 1 when not started by the SCM; just make sure it starts.
+          $p = Start-Process -FilePath publish\WifiReporter.exe -ArgumentList "help" -Wait -PassThru
+          Write-Host "exit code $($p.ExitCode)"
+
+      - name: Add iperf3
+        shell: pwsh
+        run: |
+          # ar51an Windows build (the one winget installs); needs cygwin1.dll next to iperf3.exe.
+          # Pinned version + hash: bump both together.
+          $url = "https://github.com/ar51an/iperf3-win-builds/releases/download/3.22/iperf-3.22-win64.zip"
+          $sha256 = "c9feabb3d721039508ccb81f74c2ada3ae11b9e75d33d24510573c2aa21da420"
+          Invoke-WebRequest $url -OutFile iperf.zip
+          if ((Get-FileHash iperf.zip -Algorithm SHA256).Hash -ne $sha256) { throw "iperf3 zip hash mismatch" }
+          Expand-Archive iperf.zip -DestinationPath iperf
+          Copy-Item iperf/iperf3.exe, iperf/cygwin1.dll publish/
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Copy-Item README.md, deploy/install.ps1, deploy/install.cmd publish/
+          Compress-Archive -Path publish/* -DestinationPath WifiReporter-win-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WifiReporter-win-x64
+          path: WifiReporter-win-x64.zip
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: WifiReporter-win-x64.zip
